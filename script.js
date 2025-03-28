@@ -14,15 +14,27 @@ document.addEventListener('DOMContentLoaded', function() {
     modal.className = 'modal';
     document.body.appendChild(modal);
     
-    // Event Listeners (3 distinct types)
-    // 1. Scroll event for navbar
+    // Event Listeners
     window.addEventListener('scroll', handleScroll);
-    
-    // 2. Keypress event for search
     searchInput.addEventListener('keypress', handleSearch);
-    
-    // 3. Click event for modal close
     modal.addEventListener('click', closeModal);
+    
+    // UPDATE: Added search button event listener if button exists
+    const searchButton = document.getElementById('search-button');
+    if (searchButton) {
+        searchButton.addEventListener('click', () => {
+            const query = searchInput.value.trim();
+            if (query) {
+                searchMovies(query);
+            }
+        });
+    }
+    
+    // UPDATE: Added reset button event listener if button exists
+    const resetButton = document.getElementById('reset-button');
+    if (resetButton) {
+        resetButton.addEventListener('click', resetToInitialView);
+    }
     
     // Initialize the page
     initializePage();
@@ -36,6 +48,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Enter') {
             const query = searchInput.value.trim();
             if (query) {
+                // UPDATE: Clear input after search
+                searchInput.value = '';
                 searchMovies(query);
             }
         }
@@ -54,6 +68,20 @@ document.addEventListener('DOMContentLoaded', function() {
         fetchAndDisplayMovies('batman', trendingMoviesContainer, 'Trending Now');
         fetchAndDisplayMovies('action', actionMoviesContainer, 'Action Movies');
         fetchAndDisplayMovies('comedy', comedyMoviesContainer, 'Comedy Movies');
+    }
+    
+    // UPDATE: Added reset function
+    function resetToInitialView() {
+        searchInput.value = '';
+        initializePage();
+        
+        // UPDATE: Reset section titles
+        document.querySelectorAll('.section-title').forEach((title, index) => {
+            const defaultTitles = ['Popular Movies', 'Trending Now', 'Action Movies', 'Comedy Movies'];
+            if (index < defaultTitles.length) {
+                title.textContent = defaultTitles[index];
+            }
+        });
     }
     
     async function fetchAndDisplayMovies(query, container, title) {
@@ -87,7 +115,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayMovies(movies, container) {
         container.innerHTML = '';
         
-        // Using forEach for iteration (requirement)
         movies.forEach(movie => {
             const movieCard = createMovieCard(movie);
             container.appendChild(movieCard);
@@ -108,13 +135,18 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         
-        // Add click event to show details
         movieCard.addEventListener('click', () => showMovieDetails(movie.imdbID));
         
         return movieCard;
     }
     
     async function searchMovies(query) {
+        if (!query) {
+            // UPDATE: If empty query, reset to initial state
+            resetToInitialView();
+            return;
+        }
+
         const allContainers = [
             popularMoviesContainer, 
             trendingMoviesContainer, 
@@ -131,19 +163,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await fetchMovies(query);
             
             if (data.Response === 'True') {
-                // Map to simpler format (demonstrating array.map)
-                const simplifiedMovies = data.Search.map(movie => ({
-                    id: movie.imdbID,
-                    title: movie.Title,
-                    year: movie.Year,
-                    poster: movie.Poster
-                }));
+                // UPDATE: Filter out movies without posters in search results
+                const moviesWithPosters = data.Search.filter(movie => movie.Poster !== 'N/A');
                 
-                // Display in first container only
-                displayMovies(simplifiedMovies, popularMoviesContainer);
-                
-                // Update section title
-                document.querySelector('.section-title').textContent = `Search Results for "${query}"`;
+                if (moviesWithPosters.length === 0) {
+                    popularMoviesContainer.innerHTML = `<p class="error">No results with posters found for "${query}"</p>`;
+                } else {
+                    // Display in first container only
+                    displayMovies(moviesWithPosters, popularMoviesContainer);
+                    
+                    // UPDATE: Update section title more reliably
+                    const sectionTitle = popularMoviesContainer.previousElementSibling;
+                    if (sectionTitle && sectionTitle.classList.contains('section-title')) {
+                        sectionTitle.textContent = `Search Results for "${query}"`;
+                    }
+                }
                 
                 // Clear other containers
                 allContainers.slice(1).forEach(container => {
@@ -151,10 +185,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             } else {
                 popularMoviesContainer.innerHTML = `<p class="error">No results found for "${query}"</p>`;
+                // Clear other containers
+                allContainers.slice(1).forEach(container => {
+                    container.innerHTML = '';
+                });
             }
         } catch (error) {
             console.error('Search error:', error);
-            popularMoviesContainer.innerHTML = '<p class="error">Search failed</p>';
+            popularMoviesContainer.innerHTML = '<p class="error">Search failed. Please try again.</p>';
         }
     }
     
