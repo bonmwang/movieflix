@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // API Key
-    const API_KEY = 'e47c5a8f';
+    // API Configuration
+    const API_KEY = 'e47c5a8f'; 
+    const BASE_URL = 'https://www.omdbapi.com/';
     
     // DOM Elements
     const popularMoviesContainer = document.getElementById('popular-movies');
@@ -9,71 +10,111 @@ document.addEventListener('DOMContentLoaded', function() {
     const comedyMoviesContainer = document.getElementById('comedy-movies');
     const searchInput = document.getElementById('search-input');
     const navbar = document.querySelector('.navbar');
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    document.body.appendChild(modal);
     
-    // Scroll event for navbar
-    window.addEventListener('scroll', function() {
-        if (window.scrollY > 100) {
-            navbar.classList.add('scrolled');
-        } else {
-            navbar.classList.remove('scrolled');
-        }
-    });
+    // Event Listeners (3 distinct types)
+    // 1. Scroll event for navbar
+    window.addEventListener('scroll', handleScroll);
     
-    // Search functionality
-    searchInput.addEventListener('keypress', function(e) {
+    // 2. Keypress event for search
+    searchInput.addEventListener('keypress', handleSearch);
+    
+    // 3. Click event for modal close
+    modal.addEventListener('click', closeModal);
+    
+    // Initialize the page
+    initializePage();
+    
+    // Functions
+    function handleScroll() {
+        navbar.classList.toggle('scrolled', window.scrollY > 100);
+    }
+    
+    function handleSearch(e) {
         if (e.key === 'Enter') {
             const query = searchInput.value.trim();
             if (query) {
                 searchMovies(query);
             }
         }
-    });
-    
-    // Fetch and display movies
-    fetchMovies('avengers', popularMoviesContainer);
-    fetchMovies('batman', trendingMoviesContainer);
-    fetchMovies('action', actionMoviesContainer);
-    fetchMovies('comedy', comedyMoviesContainer);
-    
-    // Function to fetch movies from OMDB API
-    function fetchMovies(query, container) {
-        fetch(`https://www.omdbapi.com/?apikey=${API_KEY}&s=${query}&type=movie`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.Response === 'True') {
-                    displayMovies(data.Search, container);
-                } else {
-                    container.innerHTML = '<p>No movies found</p>';
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching movies:', error);
-                container.innerHTML = '<p>Error loading movies</p>';
-            });
     }
     
-    // Function to display movies
+    function closeModal(e) {
+        if (e.target === modal || e.target.classList.contains('close-modal')) {
+            modal.style.display = 'none';
+            modal.innerHTML = '';
+        }
+    }
+    
+    function initializePage() {
+        // Fetch movies for different categories
+        fetchAndDisplayMovies('avengers', popularMoviesContainer, 'Popular Movies');
+        fetchAndDisplayMovies('batman', trendingMoviesContainer, 'Trending Now');
+        fetchAndDisplayMovies('action', actionMoviesContainer, 'Action Movies');
+        fetchAndDisplayMovies('comedy', comedyMoviesContainer, 'Comedy Movies');
+    }
+    
+    async function fetchAndDisplayMovies(query, container, title) {
+        try {
+            container.innerHTML = '<div class="loading">Loading...</div>';
+            const data = await fetchMovies(query);
+            
+            if (data.Response === 'True') {
+                // Filter out movies without posters
+                const moviesWithPosters = data.Search.filter(movie => movie.Poster !== 'N/A');
+                displayMovies(moviesWithPosters, container);
+                
+                // Update section title if provided
+                if (title && container.previousElementSibling.classList.contains('section-title')) {
+                    container.previousElementSibling.textContent = title;
+                }
+            } else {
+                container.innerHTML = '<p class="error">No movies found</p>';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            container.innerHTML = '<p class="error">Failed to load movies</p>';
+        }
+    }
+    
+    async function fetchMovies(query) {
+        const response = await fetch(`${BASE_URL}?apikey=${API_KEY}&s=${query}&type=movie`);
+        return await response.json();
+    }
+    
     function displayMovies(movies, container) {
         container.innerHTML = '';
         
+        // Using forEach for iteration (requirement)
         movies.forEach(movie => {
-            const movieCard = document.createElement('div');
-            movieCard.className = 'movie-card';
-            
-            movieCard.innerHTML = `
-                <img src="${movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/200x300?text=No+Poster'}" alt="${movie.Title}">
-                <div class="movie-info">
-                    <h3 class="movie-title">${movie.Title}</h3>
-                    <p class="movie-year">${movie.Year}</p>
-                </div>
-            `;
-            
+            const movieCard = createMovieCard(movie);
             container.appendChild(movieCard);
         });
     }
     
-    // Function to search movies
-    function searchMovies(query) {
+    function createMovieCard(movie) {
+        const movieCard = document.createElement('div');
+        movieCard.className = 'movie-card';
+        
+        movieCard.innerHTML = `
+            <img src="${movie.Poster}" 
+                 alt="${movie.Title}"
+                 onerror="this.src='https://via.placeholder.com/200x300?text=Poster+Not+Available'">
+            <div class="movie-info">
+                <h3 class="movie-title">${movie.Title}</h3>
+                <p class="movie-year">${movie.Year}</p>
+            </div>
+        `;
+        
+        // Add click event to show details
+        movieCard.addEventListener('click', () => showMovieDetails(movie.imdbID));
+        
+        return movieCard;
+    }
+    
+    async function searchMovies(query) {
         const allContainers = [
             popularMoviesContainer, 
             trendingMoviesContainer, 
@@ -83,31 +124,88 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Clear all containers
         allContainers.forEach(container => {
-            container.innerHTML = '<p>Searching...</p>';
+            container.innerHTML = '<div class="loading">Searching...</div>';
         });
         
-        // Search and display in the first container
-        fetch(`https://www.omdbapi.com/?apikey=${API_KEY}&s=${query}&type=movie`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.Response === 'True') {
-                    // Clear all containers
-                    allContainers.forEach(container => {
-                        container.innerHTML = '';
-                    });
-                    
-                    // Display results in the popular movies container
-                    displayMovies(data.Search, popularMoviesContainer);
-                    
-                    // Update section title
-                    document.querySelector('.section-title').textContent = `Search Results for "${query}"`;
-                } else {
-                    popularMoviesContainer.innerHTML = `<p>No results found for "${query}"</p>`;
-                }
-            })
-            .catch(error => {
-                console.error('Error searching movies:', error);
-                popularMoviesContainer.innerHTML = '<p>Error searching movies</p>';
-            });
+        try {
+            const data = await fetchMovies(query);
+            
+            if (data.Response === 'True') {
+                // Map to simpler format (demonstrating array.map)
+                const simplifiedMovies = data.Search.map(movie => ({
+                    id: movie.imdbID,
+                    title: movie.Title,
+                    year: movie.Year,
+                    poster: movie.Poster
+                }));
+                
+                // Display in first container only
+                displayMovies(simplifiedMovies, popularMoviesContainer);
+                
+                // Update section title
+                document.querySelector('.section-title').textContent = `Search Results for "${query}"`;
+                
+                // Clear other containers
+                allContainers.slice(1).forEach(container => {
+                    container.innerHTML = '';
+                });
+            } else {
+                popularMoviesContainer.innerHTML = `<p class="error">No results found for "${query}"</p>`;
+            }
+        } catch (error) {
+            console.error('Search error:', error);
+            popularMoviesContainer.innerHTML = '<p class="error">Search failed</p>';
+        }
+    }
+    
+    async function showMovieDetails(imdbID) {
+        try {
+            modal.innerHTML = '<div class="loading">Loading details...</div>';
+            modal.style.display = 'flex';
+            
+            const response = await fetch(`${BASE_URL}?apikey=${API_KEY}&i=${imdbID}`);
+            const movieDetails = await response.json();
+            
+            if (movieDetails.Response === 'True') {
+                displayMovieModal(movieDetails);
+            } else {
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <span class="close-modal">&times;</span>
+                        <p>Failed to load movie details</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Details error:', error);
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <span class="close-modal">&times;</span>
+                    <p>Error loading details</p>
+                </div>
+            `;
+        }
+    }
+    
+    function displayMovieModal(movie) {
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <div class="modal-poster">
+                    <img src="${movie.Poster !== 'N/A' ? movie.Poster : 'https://via.placeholder.com/300x450?text=No+Poster'}" 
+                         alt="${movie.Title}">
+                </div>
+                <div class="modal-info">
+                    <h2>${movie.Title} (${movie.Year})</h2>
+                    <p><strong>Rated:</strong> ${movie.Rated}</p>
+                    <p><strong>Runtime:</strong> ${movie.Runtime}</p>
+                    <p><strong>Genre:</strong> ${movie.Genre}</p>
+                    <p><strong>Director:</strong> ${movie.Director}</p>
+                    <p><strong>Actors:</strong> ${movie.Actors}</p>
+                    <p><strong>Plot:</strong> ${movie.Plot}</p>
+                    <p><strong>IMDb Rating:</strong> ${movie.imdbRating}</p>
+                </div>
+            </div>
+        `;
     }
 });
